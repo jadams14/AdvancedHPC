@@ -220,6 +220,7 @@ int main(int argc, char* argv[])
     printf("av velocity: %.12E\n", av_vels[tt]);
     printf("tot density: %.12E\n", total_density(params, cells));
 #endif
+
     av_vels[tt+1] = timestep(params, tmp_cells, cells, obstacles);
 #ifdef DEBUG
     printf("==timestep: %d==\n", tt+1);
