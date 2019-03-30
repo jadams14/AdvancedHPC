@@ -116,18 +116,18 @@ kernel void collision(global t_speed *cells,
   /* get column and row indices */
   int ii = get_global_id(0);
   int jj = get_global_id(1);
-  int currentIter = get_global_id(2);
-  int g_size_ii = get_global_size(0);
-  int g_size_jj = get_global_size(1);
-  int l_x = get_local_id(0);
-  int l_y = get_local_id(1);
+  // int currentIter = get_global_id(2);
+  // int g_size_ii = get_global_size(0);
+  // int g_size_jj = get_global_size(1);
+  // int l_x = get_local_id(0);
+  // int l_y = get_local_id(1);
 
-  int l_size_x = get_local_size(0);
-  int l_size_y = get_local_size(1);
+  // int l_size_x = get_local_size(0);
+  // int l_size_y = get_local_size(1);
 
-  int work_group_row = (g_size_ii / l_size_x);
-  int work_group_column = (g_size_jj / l_size_y);
-  int num_workgroup = work_group_column * work_group_row;
+  // int work_group_row = (g_size_ii / l_size_x);
+  // int work_group_column = (g_size_jj / l_size_y);
+  // int num_workgroup = work_group_column * work_group_row;
 
 
   // //Used to store the local workgroups tot_u
@@ -202,7 +202,7 @@ kernel void collision(global t_speed *cells,
     /* increase counter of inspected cells */
 
     /* accumulate the norm of x- and y- velocity components */
-    l_tot_u[l_x + (l_y * l_size_x)] = (float)sqrt((u_x * u_x) + (u_y * u_y));
+    // l_tot_u[l_x + (l_y * l_size_x)] = (float)sqrt((u_x * u_x) + (u_y * u_y));
     /* increase counter of inspected cells */
     // ++l_tot_cells;
   }
@@ -216,19 +216,19 @@ kernel void collision(global t_speed *cells,
   
   
 
-  if (l_y == 0 && l_x == 0) {
+  // if (l_y == 0 && l_x == 0) {
 
-    int pos_x = ii / l_size_x;
-    int pos_y = jj / l_size_y;
-    int workgroup = pos_x + (pos_y * work_group_row);
+  //   int pos_x = ii / l_size_x;
+  //   int pos_y = jj / l_size_y;
+  //   int workgroup = pos_x + (pos_y * work_group_row);
 
-    for (int x = 0; x < l_size_x; x++) {
-      for (int y = 0; y < l_size_y; y++) {
-        g_tot_u[workgroup] += l_tot_u[x + (y * l_size_x)];
-      }
-    }
-  }
+  //   for (int x = 0; x < l_size_x; x++) {
+  //     for (int y = 0; y < l_size_y; y++) {
+  //       g_tot_u[workgroup] += l_tot_u[x + (y * l_size_x)];
+  //     }
+  //   }
+  // }
   
-  barrier(CLK_LOCAL_MEM_FENCE);
+  // barrier(CLK_LOCAL_MEM_FENCE);
 
 }

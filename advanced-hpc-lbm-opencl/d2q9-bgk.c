@@ -106,12 +106,12 @@ typedef struct
   cl_mem g_tot_u;
 } t_ocl;
 
+/* struct to hold the speed values */
 /* struct to hold the 'speed' values */
 typedef struct
 {
   float speeds[NSPEEDS];
-} t_speed;
-
+}
 /*
 ** function prototypes
 */
@@ -135,7 +135,7 @@ int write_values(const t_param params, t_speed *cells, int *obstacles, float *av
 
 /* finalise, including freeing up allocated memory */
 int finalise(const t_param *params, t_speed **cells_ptr, t_speed **tmp_cells_ptr,
-             int **obstacles_ptr, float **av_vels_ptr, float **all_tot_u, t_ocl ocl);
+             int **obstacles_ptr, float **av_vels_ptr, float **new_tot_u, t_ocl ocl);
 
 /* Sum all the densities in the grid.
 ** The total should remain constant from one timestep to the next. */
@@ -226,18 +226,19 @@ int main(int argc, char *argv[])
   float total_tot_u = 0;
   for (int tt = 0; tt < params.maxIters; tt++)
   {
-    timestep(params, cells, tmp_cells, obstacles, ocl, tt);
-    
-    // Read cells from device
-    err = clEnqueueReadBuffer(
-        ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
-        sizeof(float) * WORKGROUPS, new_tot_u, 0, NULL, NULL);
-    checkError(err, "reading g_tot_u data", __LINE__);
+    timestep(params, cells, tmp_cells, obstacles, ocl, tt);    
+    av_vels[tt] = av_velocity(params, cells, obstacles, ocl);
 
-    for (int i = 0; i < WORKGROUPS; i++) {
-      total_tot_u += new_tot_u[i];
-    }
-    av_vels[tt] = total_tot_u / (float) tot_cells;
+    // Read cells from device
+    // err = clEnqueueReadBuffer(
+    //     ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
+    //     sizeof(float) * WORKGROUPS, new_tot_u, 0, NULL, NULL);
+    // checkError(err, "reading g_tot_u data", __LINE__);
+
+    // for (int i = 0; i < WORKGROUPS; i++) {
+    //   total_tot_u += new_tot_u[i];
+    // }
+    // av_vels[tt] = total_tot_u / (float) tot_cells;
 #ifdef DEBUG
     printf("==timestep: %d==\n", tt);
     printf("av velocity: %.12E\n", av_vels[tt]);
@@ -273,7 +274,7 @@ int main(int argc, char *argv[])
   printf("Elapsed user CPU time:\t\t%.6lf (s)\n", usrtim);
   printf("Elapsed system CPU time:\t%.6lf (s)\n", systim);
   write_values(params, cells, obstacles, av_vels);
-  finalise(&params, &cells, &tmp_cells, &obstacles, &av_vels, &all_tot_u, ocl);
+  finalise(&params, &cells, &tmp_cells, &obstacles, &av_vels, &new_tot_u, ocl);
 
   return EXIT_SUCCESS;
 }
@@ -735,7 +736,7 @@ int initialise(const char *paramfile, const char *obstaclefile,
 }
 
 int finalise(const t_param *params, t_speed **cells_ptr, t_speed **tmp_cells_ptr,
-             int **obstacles_ptr, float **av_vels_ptr, float **all_tot_u, t_ocl ocl)
+             int **obstacles_ptr, float **av_vels_ptr, float **new_tot_u, t_ocl ocl)
 {
   /*
   ** free up allocated memory
@@ -752,8 +753,8 @@ int finalise(const t_param *params, t_speed **cells_ptr, t_speed **tmp_cells_ptr
   free(*av_vels_ptr);
   *av_vels_ptr = NULL;
 
-  free(*all_tot_u);
-  *all_tot_u = NULL;
+  free(*new_tot_u);
+  *new_tot_u = NULL;
 
   clReleaseMemObject(ocl.cells);
   clReleaseMemObject(ocl.tmp_cells);
