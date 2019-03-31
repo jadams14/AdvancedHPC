@@ -72,7 +72,7 @@
 #define FINALSTATEFILE "final_state.dat"
 #define AVVELSFILE "av_vels.dat"
 #define OCLFILE "kernels.cl"
-#define WORKGROUPS 16 
+#define WORKGROUPS 16
 
 /* struct to hold the parameter values */
 typedef struct
@@ -98,7 +98,6 @@ typedef struct
   cl_kernel propagate;
   cl_kernel rebound;
   cl_kernel collision;
-  
 
   cl_mem cells;
   cl_mem tmp_cells;
@@ -116,7 +115,7 @@ typedef struct
 */
 
 /* load params, allocate memory, load obstacles & initialise fluid particle densities */
-int initialise(const char *paramfile, const char *obstaclefile, t_param *params, 
+int initialise(const char *paramfile, const char *obstaclefile, t_param *params,
                int **obstacles_ptr, float **cells_ptr, float **tmp_cells_ptr,
                float **av_vels_ptr, float **new_tot_u, t_ocl *ocl);
 
@@ -163,8 +162,8 @@ int main(int argc, char *argv[])
   char *obstaclefile = NULL; /* name of a the input obstacle file */
   t_param params;            /* struct to hold parameter values */
   t_ocl ocl;                 /* struct to hold OpenCL objects */
-  float *cells = NULL;     /* grid containing fluid densities */
-  float *tmp_cells = NULL; /* scratch space */
+  float *cells = NULL;       /* grid containing fluid densities */
+  float *tmp_cells = NULL;   /* scratch space */
   int *obstacles = NULL;     /* grid indicating which cells are blocked */
   float *av_vels = NULL;     /* a record of the av. velocity computed for each timestep */
   cl_int err;
@@ -189,8 +188,6 @@ int main(int argc, char *argv[])
 
   /* initialise our data structures and load values from file */
   initialise(paramfile, obstaclefile, &params, &obstacles, &cells, &tmp_cells, &av_vels, &new_tot_u, &ocl);
-  
-
 
   /* iterate for maxIters timesteps */
   gettimeofday(&timstr, NULL);
@@ -199,13 +196,13 @@ int main(int argc, char *argv[])
   // Write cells to OpenCL buffer
   err = clEnqueueWriteBuffer(
       ocl.queue, ocl.cells, CL_TRUE, 0,
-      sizeof(cl_float)  * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
+      sizeof(cl_float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
   checkError(err, "writing cells data", __LINE__);
 
   // Write tmp_cells to OpenCL buffer
   err = clEnqueueWriteBuffer(
       ocl.queue, ocl.tmp_cells, CL_TRUE, 0,
-      sizeof(cl_float)  * params.nx * params.ny * NSPEEDS, tmp_cells, 0, NULL, NULL);
+      sizeof(cl_float) * params.nx * params.ny * NSPEEDS, tmp_cells, 0, NULL, NULL);
   checkError(err, "writing cells data", __LINE__);
 
   // Write obstacles to OpenCL buffer
@@ -213,7 +210,7 @@ int main(int argc, char *argv[])
       ocl.queue, ocl.obstacles, CL_TRUE, 0,
       sizeof(cl_int) * params.nx * params.ny, obstacles, 0, NULL, NULL);
   checkError(err, "writing obstacles data", __LINE__);
-  
+
   for (int y = 0; y < params.ny; y++)
   {
     for (int x = 0; x < params.nx; x++)
@@ -227,8 +224,8 @@ int main(int argc, char *argv[])
   float total_tot_u = 0;
   for (int tt = 0; tt < params.maxIters; tt += 2)
   {
-    timestep(params, cells, tmp_cells, obstacles, ocl, tt);    
-    av_vels[tt] = av_velocity(params, cells, obstacles, ocl);
+    timestep(params, cells, tmp_cells, obstacles, ocl, tt);
+    // av_vels[tt] = av_velocity(params, tmp_cells, obstacles, ocl);
 
     // Read cells from device
     // err = clEnqueueReadBuffer(
@@ -242,33 +239,33 @@ int main(int argc, char *argv[])
     // av_vels[tt] = total_tot_u / (float) tot_cells;
 #ifdef DEBUG
     printf("==timestep: %d==\n", tt);
-    printf("av velocity: %.12E\n", av_vels[tt]);
+    // printf("av velocity: %.12E\n", av_vels[tt]);
     printf("tot density: %.12E\n", total_density(params, cells));
 #endif
 
-    timestep(params, tmp_cells, cells, obstacles, ocl, tt+1);    
-    av_vels[tt+1] = av_velocity(params, tmp_cells, obstacles, ocl);
+    timestep(params, tmp_cells, cells, obstacles, ocl, tt + 1);
+    // av_vels[tt + 1] = av_velocity(params, cells, obstacles, ocl);
 
 #ifdef DEBUG
-    printf("==timestep: %d==\n", tt+1);
-    printf("av velocity: %.12E\n", av_vels[tt+1]);
+    printf("==timestep: %d==\n", tt + 1);
+    // printf("av velocity: %.12E\n", av_vels[tt + 1]);
     printf("tot density: %.12E\n", total_density(params, cells));
 #endif
-
   }
 
-  
   // Read cells from device
-  // err = clEnqueueReadBuffer(
-  //     ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
-  //     sizeof(cl_mem) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
-  // checkError(err, "reading cells data", __LINE__);
+  err = clEnqueueReadBuffer(
+      ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
+      sizeof(cl_mem) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
+  checkError(err, "reading cells data", __LINE__);
 
-  // for (int i = 0; i < params.maxIters; i++) {
-  //   for (int j = 0; j < WORKGROUPS; j++) {
-  //     av_vels[i] += ocl.g_tot_u[WORKGROUPS + (params.maxIters * WORKGROUPS)]
-  //   }
-  // }
+  for (int i = 0; i < params.maxIters; i++)
+  {
+    for (int j = 0; j < WORKGROUPS; j++)
+    {
+      av_vels[i] += new_tot_u[WORKGROUPS + (params.maxIters * WORKGROUPS)];
+    }
+  }
 
   gettimeofday(&timstr, NULL);
   toc = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
@@ -306,10 +303,9 @@ int timestep(const t_param params, float *cells, float *tmp_cells, int *obstacle
 
   // Read cells from device
   err = clEnqueueReadBuffer(
-      ocl.queue, ocl.cells, CL_TRUE, 0,
-      sizeof(cl_float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
+      ocl.queue, ocl.tmp_cells, CL_TRUE, 0,
+      sizeof(cl_float) * params.nx * params.ny * NSPEEDS, tmp_cells, 0, NULL, NULL);
   checkError(err, "reading cells data", __LINE__);
-
 
   return EXIT_SUCCESS;
 }
@@ -411,7 +407,7 @@ int collision(const t_param params, float *cells, float *tmp_cells, int *obstacl
   int divide = sqrt(WORKGROUPS);
 
   // Set kernel arguments
-   err = clSetKernelArg(ocl.collision, 0, sizeof(cl_mem), &ocl.cells);
+  err = clSetKernelArg(ocl.collision, 0, sizeof(cl_mem), &ocl.cells);
   checkError(err, "setting collision arg 0", __LINE__);
   err = clSetKernelArg(ocl.collision, 1, sizeof(cl_mem), &ocl.tmp_cells);
   checkError(err, "setting collision arg 1", __LINE__);
@@ -432,7 +428,7 @@ int collision(const t_param params, float *cells, float *tmp_cells, int *obstacl
 
   // Enqueue kernel
   size_t global[3] = {params.nx, params.ny, currentIter};
-  size_t local[2]  = {params.nx/divide, params.ny/divide};
+  size_t local[2] = {params.nx / divide, params.ny / divide};
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.collision,
                                2, NULL, global, local, 0, NULL, NULL);
   checkError(err, "enqueueing collision kernel", __LINE__);
@@ -440,7 +436,6 @@ int collision(const t_param params, float *cells, float *tmp_cells, int *obstacl
   // Wait for kernel to finish
   err = clFinish(ocl.queue);
   checkError(err, "waiting for collision kernel", __LINE__);
-  
 
   return EXIT_SUCCESS;
 }
@@ -484,7 +479,7 @@ float av_velocity(const t_param params, float *cells, int *obstacles, t_ocl ocl)
 }
 
 int initialise(const char *paramfile, const char *obstaclefile,
-               t_param *params, int **obstacles_ptr, 
+               t_param *params, int **obstacles_ptr,
                float **cells_ptr, float **tmp_cells_ptr,
                float **av_vels_ptr, float **new_tot_u, t_ocl *ocl)
 {
@@ -563,7 +558,6 @@ int initialise(const char *paramfile, const char *obstaclefile,
   ** a 1D array of these structs.
   */
 
-
   /* the map of obstacles */
   *obstacles_ptr = malloc(sizeof(int) * (params->ny * params->nx));
 
@@ -571,21 +565,20 @@ int initialise(const char *paramfile, const char *obstaclefile,
     die("cannot allocate column memory for obstacles", __LINE__, __FILE__);
 
   /* main grid */
-  *new_tot_u = (float *)malloc(sizeof(float) * WORKGROUPS);
+  *new_tot_u = (float *)malloc(sizeof(float) * WORKGROUPS * params->maxIters);
 
   if (*new_tot_u == NULL)
     die("cannot allocate memory for tot-u", __LINE__, __FILE__);
 
-
   *cells_ptr = (float *)malloc(sizeof(float) * params->nx * params->ny * NSPEEDS);
   if (*cells_ptr == NULL)
     die("cannot allocate memory for cells", __LINE__, __FILE__);
-    
+
   *tmp_cells_ptr = (float *)malloc(sizeof(float) * params->nx * params->ny * NSPEEDS);
   if (*tmp_cells_ptr == NULL)
     die("cannot allocate memory for tmp_cells", __LINE__, __FILE__);
- 
- /* initialise densities */
+
+  /* initialise densities */
   float w0 = params->density * 4.f / 9.f;
   float w1 = params->density / 9.f;
   float w2 = params->density / 36.f;
@@ -609,8 +602,6 @@ int initialise(const char *paramfile, const char *obstaclefile,
     }
   }
 
-  
-  
   /* first set all cells in obstacle array to zero */
   for (int jj = 0; jj < params->ny; jj++)
   {
@@ -620,9 +611,12 @@ int initialise(const char *paramfile, const char *obstaclefile,
     }
   }
 
-  for (int ii = 0; ii < WORKGROUPS; ii++)
+  for (int jj = 0; jj < params->maxIters; jj++)
   {
-    (*new_tot_u)[ii] = 0;
+    for (int ii = 0; ii < WORKGROUPS; ii++)
+    {
+      (*new_tot_u)[ii + (jj * WORKGROUPS)] = 0;
+    }
   }
 
   /* open the obstacle data file */
@@ -724,7 +718,6 @@ int initialise(const char *paramfile, const char *obstaclefile,
   ocl->collision = clCreateKernel(ocl->program, "collision", &err);
   checkError(err, "creating collision kernel", __LINE__);
 
-  
   ocl->obstacles = clCreateBuffer(
       ocl->context, CL_MEM_READ_WRITE,
       sizeof(cl_int) * params->nx * params->ny, NULL, &err);

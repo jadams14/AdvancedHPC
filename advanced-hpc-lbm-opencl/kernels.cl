@@ -272,13 +272,12 @@ kernel void collision(global t_speed *cells,
 
     for (int x = 0; x < l_size_x; x++) {
       for (int y = 0; y < l_size_y; y++) {
-        g_tot_u[workgroup] += l_tot_u[x + (y * l_size_x)];
+        g_tot_u[workgroup + (currentIter * num_workgroup)] += l_tot_u[x + (y * l_size_x)];
       }
-      // printf("%f\n", g_tot_u[workgroup]);
     }
     
   }
   
-  // barrier(CLK_LOCAL_MEM_FENCE);
+  barrier(CLK_LOCAL_MEM_FENCE);
 
 }
