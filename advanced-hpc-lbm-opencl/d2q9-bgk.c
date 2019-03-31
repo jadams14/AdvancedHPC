@@ -226,60 +226,36 @@ int main(int argc, char *argv[])
   for (int tt = 0; tt < params.maxIters; tt+=2)
   {
     timestep(params, cells, tmp_cells, obstacles, ocl, tt);
-
-    // Read cells from device
-    err = clEnqueueReadBuffer(
-        ocl.queue, ocl.cells, CL_TRUE, 0,
-        sizeof(float) * WORKGROUPS, cells, 0, NULL, NULL);
-    checkError(err, "reading g_tot_u data", __LINE__);
-    av_vels[tt] = av_velocity(params, cells, obstacles, ocl);
-
-    // for (int i = 0; i < WORKGROUPS; i++) {
-    //   total_tot_u += new_tot_u[i];
-    // }
-    // av_vels[tt] = total_tot_u / (float) tot_cells;
-
 #ifdef DEBUG
     printf("==timestep: %d==\n", tt );
     printf("av velocity: %.12E\n", av_vels[tt ]);
     printf("tot density: %.12E\n", total_density(params, cells));
 #endif
+
     timestep(params, cells, tmp_cells, obstacles, ocl, tt+1);
-
-    // Read cells from device
-    err = clEnqueueReadBuffer(
-        ocl.queue, ocl.tmp_cells, CL_TRUE, 0,
-        sizeof(float) * WORKGROUPS, cells, 0, NULL, NULL);
-    checkError(err, "reading g_tot_u data", __LINE__);
-    av_vels[tt] = av_velocity(params, cells, obstacles, ocl);
-
-    // for (int i = 0; i < WORKGROUPS; i++) {
-    //   total_tot_u += new_tot_u[i];
-    // }
-    // av_vels[tt] = total_tot_u / (float) tot_cells;
-
 #ifdef DEBUG
     printf("==timestep: %d==\n", tt +1);
     printf("av velocity: %.12E\n", av_vels[tt +1]);
-    printf("tot density: %.12E\n", total_density(params, cells));
+    printf("tot density: %.12E\n", total_density(params, tmp_cells));
 #endif
 
   }
 
   // Read cells from device
-  // err = clEnqueueReadBuffer(
-  //     ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
-  //     sizeof(cl_float) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
-  // checkError(err, "reading cells data", __LINE__);
+  err = clEnqueueReadBuffer(
+      ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
+      sizeof(cl_float) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
+  checkError(err, "reading cells data", __LINE__);
 
-  // for (int i = 0; i < params.maxIters; i++)
-  // {
-  //   for (int j = 0; j < WORKGROUPS; j++)
-  //   {
-  //     av_vels[i] += new_tot_u[WORKGROUPS + (params.maxIters * WORKGROUPS)];
-  //   }
-  //   // if ((int)av_vels[i] != 0) printf("%d %f\n", i, av_vels[i]);
-  // }
+  for (int i = 0; i < params.maxIters; i++)
+  {
+    for (int j = 0; j < WORKGROUPS; j++)
+    {
+      av_vels[i] += new_tot_u[WORKGROUPS + (params.maxIters * WORKGROUPS)];
+    }
+    av_vels[i] /= (float) tot_cells;
+    // printf("%d %f\n", i, av_vels[i]);
+  }
 
   gettimeofday(&timstr, NULL);
   toc = timstr.tv_sec + (timstr.tv_usec / 1000000.0);

@@ -293,7 +293,7 @@ kernel void collision(global float *cells,
       for (int y = 0; y < l_size_y; y++) {
         g_tot_u[workgroup + (currentIter * num_workgroup)] += l_tot_u[x + (y * l_size_x)];
       }
-      // if ((int)g_tot_u[workgroup + (currentIter * num_workgroup) != 0]) {
+      // if ((int)g_tot_u[workgroup + (currentIter * num_workgroup)] != 0 && !isnan(g_tot_u[workgroup + (currentIter * num_workgroup)])) {
       //   printf("%d %f\n", workgroup + (currentIter * num_workgroup), g_tot_u[workgroup + (currentIter * num_workgroup)]);
       // }
     }
