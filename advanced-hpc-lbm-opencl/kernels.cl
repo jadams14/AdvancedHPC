@@ -131,7 +131,7 @@ kernel void collision(global float *cells,
                         + speed7
                         + speed8))
                     / local_density;
-
+    printf("%f %f \n", u_x, u_y);
     /* velocity squared */
     const float u_sq = u_x * u_x + u_y * u_y;
     // printf("%f %f %f", u_x, u_y, u_sq);
@@ -178,7 +178,6 @@ kernel void collision(global float *cells,
                                      + (u[8] * u[8]) / (timesedC_SQ)
                                      - minusU_SQ));
 
-  // printf("%f %f %f %f %f %f %f %f %f\n", d_equ[0],d_equ[1],d_equ[2],d_equ[3],d_equ[4],d_equ[5],d_equ[6],d_equ[7],d_equ[8]);
     // printf("%f %f %f %f %f %f %f %f %f\n", tmp_cells[ii + (jj * nx)  + (0 * totalSize)], tmp_cells[ii + (jj * nx)  + (1 * totalSize)],
     //                                        tmp_cells[ii + (jj * nx)  + (2 * totalSize)], tmp_cells[ii + (jj * nx)  + (3 * totalSize)], 
     //                                        tmp_cells[ii + (jj * nx)  + (4 * totalSize)], tmp_cells[ii + (jj * nx)  + (5 * totalSize)], 
@@ -187,7 +186,7 @@ kernel void collision(global float *cells,
     /* relaxation step */
     // printf("%f", tmp_cells[ii + (jj * nx) + (0 * totalSize)]);
     tmp_cells[ii + (jj * nx) + (0 * totalSize)]  = (speed + omega * (d_equ - speed));
-    // printf(" %f\n", tmp_cells[ii + (jj * nx) + (0 * totalSize)]);
+    // // printf(" %f\n", tmp_cells[ii + (jj * nx) + (0 * totalSize)]);
     tmp_cells[ii + (jj * nx)  + (1 * totalSize)] = (speed1 + omega * (d_equ1 - speed1));
     tmp_cells[ii + (jj * nx)  + (2 * totalSize)] = (speed2 + omega * (d_equ2 - speed2));
     tmp_cells[ii + (jj * nx)  + (3 * totalSize)] = (speed3 + omega * (d_equ3 - speed3));
@@ -197,12 +196,12 @@ kernel void collision(global float *cells,
     tmp_cells[ii + (jj * nx)  + (7 * totalSize)] = (speed7 + omega * (d_equ7 - speed7));
     tmp_cells[ii + (jj * nx)  + (8 * totalSize)] = (speed8 + omega * (d_equ8 - speed8));
   // if (!isnan(tmp_cells[ii + (jj * nx)  + (0 * totalSize)]) && cells[ii + (jj * nx)  + (0 * totalSize)] != 0) {
-    // printf("%f %f %f %f %f %f %f %f %f\n", tmp_cells[ii + (jj * nx)  + (0 * totalSize)], tmp_cells[ii + (jj * nx)  + (1 * totalSize)],
-    //                                        tmp_cells[ii + (jj * nx)  + (2 * totalSize)], tmp_cells[ii + (jj * nx)  + (3 * totalSize)], 
-    //                                        tmp_cells[ii + (jj * nx)  + (4 * totalSize)], tmp_cells[ii + (jj * nx)  + (5 * totalSize)], 
-    //                                        tmp_cells[ii + (jj * nx)  + (6 * totalSize)], tmp_cells[ii + (jj * nx)  + (7 * totalSize)], 
-    //                                        tmp_cells[ii + (jj * nx)  + (8 * totalSize)]);
-  // }
+  //   printf("%f %f %f %f %f %f %f %f %f\n", tmp_cells[ii + (jj * nx)  + (0 * totalSize)], tmp_cells[ii + (jj * nx)  + (1 * totalSize)],
+  //                                          tmp_cells[ii + (jj * nx)  + (2 * totalSize)], tmp_cells[ii + (jj * nx)  + (3 * totalSize)], 
+  //                                          tmp_cells[ii + (jj * nx)  + (4 * totalSize)], tmp_cells[ii + (jj * nx)  + (5 * totalSize)], 
+  //                                          tmp_cells[ii + (jj * nx)  + (6 * totalSize)], tmp_cells[ii + (jj * nx)  + (7 * totalSize)], 
+  //                                          tmp_cells[ii + (jj * nx)  + (8 * totalSize)]);
+  // // }
   /* increase counter of inspected cells */
 
   /* accumulate the norm of x- and y- velocity components */
