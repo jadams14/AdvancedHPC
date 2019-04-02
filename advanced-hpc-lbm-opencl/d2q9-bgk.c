@@ -194,24 +194,17 @@ int main(int argc, char *argv[])
       ocl.queue, ocl.cells, CL_TRUE, 0,
       sizeof(cl_float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
   checkError(err, "writing cells data", __LINE__);
-  // Write cells to OpenCL buffer
-  err = clEnqueueWriteBuffer(
-      ocl.queue, ocl.tmp_cells, CL_TRUE, 0,
-      sizeof(cl_float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
-  checkError(err, "writing cells data", __LINE__);
-
   // Write obstacles to OpenCL buffer
   err = clEnqueueWriteBuffer(
       ocl.queue, ocl.obstacles, CL_TRUE, 0,
       sizeof(cl_int) * params.nx * params.ny, obstacles, 0, NULL, NULL);
   checkError(err, "writing obstacles data", __LINE__);
-  
   // Write obstacles to OpenCL buffer
   err = clEnqueueWriteBuffer(
       ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
       sizeof(cl_float) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
-  checkError(err, "writing tot_u data", __LINE__);
-
+  checkError(err, "writing obstacles data", __LINE__);
+  
   int totalSize = params.nx * params.ny;
   for (int y = 0; y < params.ny; y++)
   {
@@ -228,11 +221,12 @@ int main(int argc, char *argv[])
   {
     timestep(params, obstacles, ocl, tt);
   }
+
   printf("%d\n", tot_cells);
   // Read cells from device
   err = clEnqueueReadBuffer(
       ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
-      sizeof(cl_float) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
+      sizeof(float) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
   checkError(err, "reading cells data", __LINE__);
 
   for (int i = 0; i < params.maxIters; i++)
@@ -256,7 +250,7 @@ int main(int argc, char *argv[])
 
   err = clEnqueueReadBuffer(
       ocl.queue, ocl.cells, CL_TRUE, 0,
-      sizeof(cl_float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
+      sizeof(float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
   checkError(err, "reading cells data", __LINE__);
   for (int y = 0; y < params.ny; y++)
   {
