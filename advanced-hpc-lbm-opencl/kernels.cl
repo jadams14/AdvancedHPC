@@ -224,7 +224,7 @@ kernel void collision(global t_speed *cells,
   
 
   if (l_y == 0 && l_x == 0) {
-    int num_workgroup = divide * divide;
+    int num_workgroup = get_num_groups(0) * get_num_groups(1);
 
     for (int xx = 0; xx < l_size_x; xx++) {
       for (int yy = 0; yy < l_size_y; yy++) {
