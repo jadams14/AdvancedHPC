@@ -151,6 +151,7 @@ kernel void collision(global t_speed *cells,
     cells[ii + jj * nx].speeds[6] = tmp_cells[ii + jj * nx].speeds[8];
     cells[ii + jj * nx].speeds[7] = tmp_cells[ii + jj * nx].speeds[5];
     cells[ii + jj * nx].speeds[8] = tmp_cells[ii + jj * nx].speeds[6];
+
   }
   /* don't consider occupied cells */
   else if (!obstacles[ii + jj * nx])
@@ -200,6 +201,7 @@ kernel void collision(global t_speed *cells,
     for (int kk = 0; kk < NSPEEDS; kk++) {
       cells[ii + jj * nx].speeds[kk] = tmp_cells[ii + jj * nx].speeds[kk] + omega * (d_equ[kk] - tmp_cells[ii + jj *nx].speeds[kk]);
     }
+
     /* accumulate the norm of x- and y- velocity components */
     l_tot_u[l_x + (l_y * l_size_x)] = (float)sqrt((u_x * u_x) + (u_y * u_y));
     // printf("%f %f %f %f %f %f %f %f %f\n", cells[ii + jj * nx].speeds[0], cells[ii + jj * nx].speeds[1],
@@ -222,7 +224,7 @@ kernel void collision(global t_speed *cells,
   
 
   if (l_y == 0 && l_x == 0) {
-    int num_workgroup = x * y;
+    int num_workgroup = divide * divide;
 
     for (int xx = 0; xx < l_size_x; xx++) {
       for (int yy = 0; yy < l_size_y; yy++) {

@@ -235,18 +235,11 @@ int main(int argc, char *argv[])
       ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
       sizeof(float) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
   checkError(err, "reading cells data", __LINE__);
-  int maxIter = params.maxIters * WORKGROUPS;
-  int count = 0;
   for (int i = 0; i < params.maxIters; i++) {
     for (int j = 0; j < WORKGROUPS; j++) {
       av_vels[i] += new_tot_u[j + (i * WORKGROUPS)];
-      count++;
     }
     av_vels[i] /= (float) tot_cells;
-      // printf("%f\n", av_vels[i]);
-  }
-  if (count == maxIter) {
-    printf("Loops Completely");
   }
   gettimeofday(&timstr, NULL);
   toc = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
@@ -397,7 +390,7 @@ int collision(const t_param params, t_speed *cells, t_speed *tmp_cells, int *obs
   checkError(err, "setting collision arg 3", __LINE__);
   err = clSetKernelArg(ocl.collision, 3, sizeof(cl_mem), &ocl.g_tot_u);
   checkError(err, "setting collision arg 3", __LINE__);
-  err = clSetKernelArg(ocl.collision, 4, sizeof(cl_float) * ((params.nx * params.ny) / WORKGROUPS), NULL);
+  err = clSetKernelArg(ocl.collision, 4, sizeof(cl_float) * ((params.nx/divide) * (params.ny/divide)), NULL);
   checkError(err, "setting collision arg 4", __LINE__);
   // err = clSetKernelArg(ocl.collision, 5, sizeof(cl_int), NULL);
   // checkError(err, "setting collision arg 5", __LINE__);
@@ -605,7 +598,7 @@ int initialise(const char *paramfile, const char *obstaclefile,
   for (int jj = 0; jj < params->maxIters; jj++) {
     for (int ii = 0; ii < WORKGROUPS; ii++)
     {
-      (*new_tot_u)[ii] = -1;
+      (*new_tot_u)[ii + WORKGROUPS * jj] = 0;
     }
   }
 
