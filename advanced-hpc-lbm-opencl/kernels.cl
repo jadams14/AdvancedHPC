@@ -44,74 +44,9 @@ kernel void accelerate_flow(global float* cells,
       cells[ii + jj*nx + (3 * totalSize)] -= w1;
       cells[ii + jj*nx + (6 * totalSize)] -= w2;
       cells[ii + jj*nx + (7 * totalSize)] -= w2;
-      printf("Gets Here");
-      printf("%f %f %f %f %f %f %f %f %f\n", cells[index + (0 * totalSize)], cells[index + (1 * totalSize)],
-                                           cells[index + (2 * totalSize)], cells[index + (3 * totalSize)], 
-                                           cells[index + (4 * totalSize)], cells[index + (5 * totalSize)], 
-                                           cells[index + (6 * totalSize)], cells[index + (7 * totalSize)], 
-                                           cells[index + (8 * totalSize)]);
     }
   }
-  // // if (!isnan(cells[index + (0 * totalSize)]) && cells[index + (0 * totalSize)] != 0) {
-  //   printf("%f %f %f %f %f %f %f %f %f\n", cells[index + (0 * totalSize)], cells[index + (1 * totalSize)],
-  //                                          cells[index + (2 * totalSize)], cells[index + (3 * totalSize)], 
-  //                                          cells[index + (4 * totalSize)], cells[index + (5 * totalSize)], 
-  //                                          cells[index + (6 * totalSize)], cells[index + (7 * totalSize)], 
-  //                                          cells[index + (8 * totalSize)]);
-  // }
 }
-
-// kernel void rebound(global t_speed* cells,
-//                     global t_speed* tmp_cells,
-//                     global int* obstacles,
-//                     int nx, int ny) {
-//   /* get column and row indices */
-//   int ii = get_global_id(0);
-//   int jj = get_global_id(1);
-  
-//   if (obstacles[jj * nx + ii]) {
-
-//     /* called after propagate, so taking values from scratch space
-//     ** mirroring, and writing into main grid */
-//     cells[ii + jj * nx].speeds[1] = tmp_cells[ii + jj * nx].speeds[3];
-//     cells[ii + jj * nx].speeds[2] = tmp_cells[ii + jj * nx].speeds[4];
-//     cells[ii + jj * nx].speeds[3] = tmp_cells[ii + jj * nx].speeds[1];
-//     cells[ii + jj * nx].speeds[4] = tmp_cells[ii + jj * nx].speeds[2];
-//     cells[ii + jj * nx].speeds[5] = tmp_cells[ii + jj * nx].speeds[7];
-//     cells[ii + jj * nx].speeds[6] = tmp_cells[ii + jj * nx].speeds[8];
-//     cells[ii + jj * nx].speeds[7] = tmp_cells[ii + jj * nx].speeds[5];
-//     cells[ii + jj * nx].speeds[8] = tmp_cells[ii + jj * nx].speeds[6];
-//   }
-// }
-
-// kernel void propagate(global t_speed* cells,
-//                       global t_speed* tmp_cells,
-//                       global int* obstacles,
-//                       int nx, int ny) {
-//   /* get column and row indices */
-//   int ii = get_global_id(0);
-//   int jj = get_global_id(1);
-
-//   /* determine indices of axis-direction neighbours
-//   ** respecting periodic boundary conditions (wrap around) */
-//   int y_n = (jj + 1) % ny;
-//   int x_e = (ii + 1) % nx;
-//   int y_s = (jj == 0) ? (jj + ny - 1) : (jj - 1);
-//   int x_w = (ii == 0) ? (ii + nx - 1) : (ii - 1);
-
-//   /* propagate densities from neighbouring cells, following
-//   ** appropriate directions of travel and writing into
-//   ** scratch space grid */
-//   tmp_cells[ii + jj*nx].speeds[0] = cells[ii + jj*nx].speeds[0]; /* central cell, no movement */
-//   tmp_cells[ii + jj*nx].speeds[1] = cells[x_w + jj*nx].speeds[1]; /* east */
-//   tmp_cells[ii + jj*nx].speeds[2] = cells[ii + y_s*nx].speeds[2]; /* north */
-//   tmp_cells[ii + jj*nx].speeds[3] = cells[x_e + jj*nx].speeds[3]; /* west */
-//   tmp_cells[ii + jj*nx].speeds[4] = cells[ii + y_n*nx].speeds[4]; /* south */
-//   tmp_cells[ii + jj*nx].speeds[5] = cells[x_w + y_s*nx].speeds[5]; /* north-east */
-//   tmp_cells[ii + jj*nx].speeds[6] = cells[x_e + y_s*nx].speeds[6]; /* north-west */
-//   tmp_cells[ii + jj*nx].speeds[7] = cells[x_e + y_n*nx].speeds[7]; /* south-west */
-//   tmp_cells[ii + jj*nx].speeds[8] = cells[x_w + y_n*nx].speeds[8]; /* south-east */
-// }
 
 kernel void collision(global float *cells, 
                       global float *tmp_cells, 
@@ -267,9 +202,6 @@ kernel void collision(global float *cells,
     //                                        tmp_cells[ii + (jj * nx)  + (4 * totalSize)], tmp_cells[ii + (jj * nx)  + (5 * totalSize)], 
     //                                        tmp_cells[ii + (jj * nx)  + (6 * totalSize)], tmp_cells[ii + (jj * nx)  + (7 * totalSize)], 
     //                                        tmp_cells[ii + (jj * nx)  + (8 * totalSize)]);
-  // }
-  // if (!isnan(u_x) && isnan(u_y)) {
-  //   printf("%f %f\n", u_x, u_y);
   // }
   /* increase counter of inspected cells */
 

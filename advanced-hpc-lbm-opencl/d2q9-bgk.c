@@ -188,10 +188,15 @@ int main(int argc, char *argv[])
   /* iterate for maxIters timesteps */
   gettimeofday(&timstr, NULL);
   tic = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
-
+    
   // Write cells to OpenCL buffer
   err = clEnqueueWriteBuffer(
       ocl.queue, ocl.cells, CL_TRUE, 0,
+      sizeof(cl_float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
+  checkError(err, "writing cells data", __LINE__);
+  // Write cells to OpenCL buffer
+  err = clEnqueueWriteBuffer(
+      ocl.queue, ocl.tmp_cells, CL_TRUE, 0,
       sizeof(cl_float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
   checkError(err, "writing cells data", __LINE__);
 
