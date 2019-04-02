@@ -99,7 +99,9 @@ kernel void collision(global t_speed *cells,
                       global float *g_tot_u,
                       local float *l_tot_u,
                       int nx, int ny,
-                      float omega) {
+                      float omega, 
+                      int currentIter, 
+                      int divide) {
 
   const float c_sq = 1.f / 3.f; /* square of speed of sound */
   const float w0 = 4.f / 9.f;   /* weighting factor */
@@ -116,18 +118,17 @@ kernel void collision(global t_speed *cells,
   /* get column and row indices */
   int ii = get_global_id(0);
   int jj = get_global_id(1);
-  int currentIter = get_global_id(2);
   int g_size_ii = get_global_size(0);
   int g_size_jj = get_global_size(1);
   int l_x = get_local_id(0);
   int l_y = get_local_id(1);
+  int x = get_group_id(0);
+  int y = get_group_id(1);
 
   int l_size_x = get_local_size(0);
   int l_size_y = get_local_size(1);
 
-  int work_group_row = (g_size_ii / l_size_x);
-  int work_group_column = (g_size_jj / l_size_y);
-  int num_workgroup = work_group_column * work_group_row;
+  int workgroup = x + (y * divide);
 
 
   // //Used to store the local workgroups tot_u
@@ -199,12 +200,16 @@ kernel void collision(global t_speed *cells,
     for (int kk = 0; kk < NSPEEDS; kk++) {
       cells[ii + jj * nx].speeds[kk] = tmp_cells[ii + jj * nx].speeds[kk] + omega * (d_equ[kk] - tmp_cells[ii + jj *nx].speeds[kk]);
     }
-    /* increase counter of inspected cells */
-
     /* accumulate the norm of x- and y- velocity components */
     l_tot_u[l_x + (l_y * l_size_x)] = (float)sqrt((u_x * u_x) + (u_y * u_y));
+    // printf("%f %f %f %f %f %f %f %f %f\n", cells[ii + jj * nx].speeds[0], cells[ii + jj * nx].speeds[1],
+    //                                      cells[ii + jj * nx].speeds[2], cells[ii + jj * nx].speeds[3],
+    //                                      cells[ii + jj * nx].speeds[4], cells[ii + jj * nx].speeds[5],
+    //                                      cells[ii + jj * nx].speeds[6], cells[ii + jj * nx].speeds[7],
+    //                                      cells[ii + jj * nx].speeds[8]);
     /* increase counter of inspected cells */
     // ++l_tot_cells;
+
   }
                
 
@@ -217,18 +222,16 @@ kernel void collision(global t_speed *cells,
   
 
   if (l_y == 0 && l_x == 0) {
+    int num_workgroup = x * y;
 
-    int pos_x = ii / l_size_x;
-    int pos_y = jj / l_size_y;
-    int workgroup = pos_x + (pos_y * work_group_row);
-
-    for (int x = 0; x < l_size_x; x++) {
-      for (int y = 0; y < l_size_y; y++) {
-        g_tot_u[workgroup] += l_tot_u[x + (y * l_size_x)];
+    for (int xx = 0; xx < l_size_x; xx++) {
+      for (int yy = 0; yy < l_size_y; yy++) {
+        g_tot_u[workgroup + (currentIter * num_workgroup)] += l_tot_u[xx + (yy * l_size_x)];
       }
+      
     }
+    // printf("%f\n", g_tot_u[workgroup + (currentIter * num_workgroup)]);
   }
   
-  barrier(CLK_LOCAL_MEM_FENCE);
 
 }

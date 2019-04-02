@@ -201,11 +201,6 @@ int main(int argc, char *argv[])
       sizeof(t_speed) * params.nx * params.ny, cells, 0, NULL, NULL);
   checkError(err, "writing cells data", __LINE__);
 
-  // Write tmp_cells to OpenCL buffer
-  err = clEnqueueWriteBuffer(
-      ocl.queue, ocl.tmp_cells, CL_TRUE, 0,
-      sizeof(t_speed) * params.nx * params.ny, tmp_cells, 0, NULL, NULL);
-  checkError(err, "writing cells data", __LINE__);
 
   // Write obstacles to OpenCL buffer
   err = clEnqueueWriteBuffer(
@@ -227,37 +222,32 @@ int main(int argc, char *argv[])
   for (int tt = 0; tt < params.maxIters; tt++)
   {
     timestep(params, cells, tmp_cells, obstacles, ocl, tt);
-    
-    // Read cells from device
-    err = clEnqueueReadBuffer(
-        ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
-        sizeof(float) * WORKGROUPS, new_tot_u, 0, NULL, NULL);
-    checkError(err, "reading g_tot_u data", __LINE__);
-
-    for (int i = 0; i < WORKGROUPS; i++) {
-      total_tot_u += new_tot_u[i];
-    }
-    av_vels[tt] = total_tot_u / (float) tot_cells;
-#ifdef DEBUG
-    printf("==timestep: %d==\n", tt);
-    printf("av velocity: %.12E\n", av_vels[tt]);
-    printf("tot density: %.12E\n", total_density(params, cells));
-#endif
   }
 
+  // Read cells from device
+  err = clEnqueueReadBuffer(
+      ocl.queue, ocl.cells, CL_TRUE, 0,
+      sizeof(t_speed) * params.nx * params.ny, cells, 0, NULL, NULL);
+  checkError(err, "reading cells data", __LINE__);
   
   // Read cells from device
-  // err = clEnqueueReadBuffer(
-  //     ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
-  //     sizeof(cl_mem) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
-  // checkError(err, "reading cells data", __LINE__);
-
-  // for (int i = 0; i < params.maxIters; i++) {
-  //   for (int j = 0; j < WORKGROUPS; j++) {
-  //     av_vels[i] += ocl.g_tot_u[WORKGROUPS + (params.maxIters * WORKGROUPS)]
-  //   }
-  // }
-
+  err = clEnqueueReadBuffer(
+      ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
+      sizeof(float) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
+  checkError(err, "reading cells data", __LINE__);
+  int maxIter = params.maxIters * WORKGROUPS;
+  int count = 0;
+  for (int i = 0; i < params.maxIters; i++) {
+    for (int j = 0; j < WORKGROUPS; j++) {
+      av_vels[i] += new_tot_u[j + (i * WORKGROUPS)];
+      count++;
+    }
+    av_vels[i] /= (float) tot_cells;
+      // printf("%f\n", av_vels[i]);
+  }
+  if (count == maxIter) {
+    printf("Loops Completely");
+  }
   gettimeofday(&timstr, NULL);
   toc = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
   getrusage(RUSAGE_SELF, &ru);
@@ -273,7 +263,7 @@ int main(int argc, char *argv[])
   printf("Elapsed user CPU time:\t\t%.6lf (s)\n", usrtim);
   printf("Elapsed system CPU time:\t%.6lf (s)\n", systim);
   write_values(params, cells, obstacles, av_vels);
-  finalise(&params, &cells, &tmp_cells, &obstacles, &av_vels, &all_tot_u, ocl);
+  finalise(&params, &cells, &tmp_cells, &obstacles, &av_vels, &new_tot_u, ocl);
 
   return EXIT_SUCCESS;
 }
@@ -417,9 +407,13 @@ int collision(const t_param params, t_speed *cells, t_speed *tmp_cells, int *obs
   checkError(err, "setting collision arg 6", __LINE__);
   err = clSetKernelArg(ocl.collision, 7, sizeof(cl_float), &params.omega);
   checkError(err, "setting collision arg 7", __LINE__);
+  err = clSetKernelArg(ocl.collision, 8, sizeof(cl_int), &currentIter);
+  checkError(err, "setting collision arg 8", __LINE__);
+  err = clSetKernelArg(ocl.collision, 9, sizeof(cl_int), &divide);
+  checkError(err, "setting collision arg 9", __LINE__);
 
   // Enqueue kernel
-  size_t global[3] = {params.nx, params.ny, currentIter};
+  size_t global[2] = {params.nx, params.ny};
   size_t local[2]  = {params.nx/divide, params.ny/divide};
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.collision,
                                2, NULL, global, local, 0, NULL, NULL);
@@ -569,7 +563,7 @@ int initialise(const char *paramfile, const char *obstaclefile,
     die("cannot allocate column memory for obstacles", __LINE__, __FILE__);
 
   /* main grid */
-  *new_tot_u = (float *)malloc(sizeof(float) * WORKGROUPS);
+  *new_tot_u = (float *)malloc(sizeof(float) * WORKGROUPS * params->maxIters);
 
   if (*new_tot_u == NULL)
     die("cannot allocate memory for tot-u", __LINE__, __FILE__);
@@ -607,11 +601,12 @@ int initialise(const char *paramfile, const char *obstaclefile,
     {
       (*obstacles_ptr)[ii + jj * params->nx] = 0;
     }
-  }
-
-  for (int ii = 0; ii < WORKGROUPS; ii++)
-  {
-    (*new_tot_u)[ii] = 0;
+  } 
+  for (int jj = 0; jj < params->maxIters; jj++) {
+    for (int ii = 0; ii < WORKGROUPS; ii++)
+    {
+      (*new_tot_u)[ii] = -1;
+    }
   }
 
   /* open the obstacle data file */
@@ -728,7 +723,7 @@ int initialise(const char *paramfile, const char *obstaclefile,
   checkError(err, "creating obstacles buffer", __LINE__);
   ocl->g_tot_u = clCreateBuffer(
       ocl->context, CL_MEM_READ_WRITE,
-      sizeof(cl_mem) * WORKGROUPS, NULL, &err);
+      sizeof(cl_float) * WORKGROUPS * params->maxIters, NULL, &err);
   checkError(err, "creating obstacles buffer", __LINE__);
 
   return EXIT_SUCCESS;
