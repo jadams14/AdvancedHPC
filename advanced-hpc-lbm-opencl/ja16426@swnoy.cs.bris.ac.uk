@@ -202,6 +202,11 @@ int main(int argc, char *argv[])
       ocl.queue, ocl.obstacles, CL_TRUE, 0,
       sizeof(cl_int) * params.nx * params.ny, obstacles, 0, NULL, NULL);
   checkError(err, "writing obstacles data", __LINE__);
+  // Write obstacles to OpenCL buffer
+  err = clEnqueueWriteBuffer(
+      ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
+      sizeof(cl_float) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
+  checkError(err, "writing obstacles data", __LINE__);
 
   int totalSize = params.nx * params.ny;
   for (int y = 0; y < params.ny; y++)
@@ -396,7 +401,6 @@ int collision(const t_param params, int *obstacles, t_ocl ocl, int currentIter)
 {
   /* loop over the cells in the grid */
   cl_int err;
-  int divide = sqrt(WORKGROUPS);
 
   // Set kernel arguments
   err = clSetKernelArg(ocl.collision, 0, sizeof(cl_mem), &ocl.cells);
