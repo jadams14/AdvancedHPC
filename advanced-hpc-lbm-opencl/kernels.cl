@@ -184,9 +184,7 @@ kernel void collision(global float *cells,
     //                                        tmp_cells[ii + (jj * nx)  + (6 * totalSize)], tmp_cells[ii + (jj * nx)  + (7 * totalSize)], 
     //                                        tmp_cells[ii + (jj * nx)  + (8 * totalSize)]);
     /* relaxation step */
-    // printf("%f", tmp_cells[ii + (jj * nx) + (0 * totalSize)]);
     tmp_cells[ii + (jj * nx) + (0 * totalSize)]  = (speed + omega * (d_equ - speed));
-    // // printf(" %f\n", tmp_cells[ii + (jj * nx) + (0 * totalSize)]);
     tmp_cells[ii + (jj * nx)  + (1 * totalSize)] = (speed1 + omega * (d_equ1 - speed1));
     tmp_cells[ii + (jj * nx)  + (2 * totalSize)] = (speed2 + omega * (d_equ2 - speed2));
     tmp_cells[ii + (jj * nx)  + (3 * totalSize)] = (speed3 + omega * (d_equ3 - speed3));
@@ -225,7 +223,7 @@ kernel void collision(global float *cells,
       for (int yy = 0; y < l_size_y; y++) {
         g_tot_u[workgroup + (currentIter * num_workgroup)] += l_tot_u[xx + (yy * l_size_x)];
       }
-      // printf("%d %f\n", workgroup + (currentIter * num_workgroup), g_tot_u[workgroup + (currentIter * num_workgroup)]);
+      printf("%d %f\n", workgroup + (currentIter * num_workgroup), g_tot_u[workgroup + (currentIter * num_workgroup)]);
     }
     
   }
