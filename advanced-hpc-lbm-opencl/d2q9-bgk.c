@@ -216,6 +216,17 @@ int main(int argc, char *argv[])
       tot_cells += 1 * (obstacles[x + (y * params.nx)] == 0);
     }
   }
+  // for (int y = 0; y < params.ny; y++)
+  // {
+  //   for (int x = 0; x < params.nx; x++)
+  //   {
+  //     for (int i = 0; i < NSPEEDS; i++)
+  //     {
+  //       printf("%f", cells[x + (y * params.nx) + (i * totalSize)]);
+  //     }
+  //     printf("\n");
+  //   }
+  // }
   float total_tot_u = 0;
   for (int tt = 0; tt < params.maxIters; tt += 2)
   {
@@ -242,7 +253,7 @@ int main(int argc, char *argv[])
       tot_u += new_tot_u[j + (i * WORKGROUPS)];
     }
     av_vels[i] = tot_u / (float)tot_cells;
-    printf("%f\n", av_vels[i]);
+    // printf("%f\n", av_vels[i]);
     tot_u = 0;
   }
 
@@ -258,17 +269,17 @@ int main(int argc, char *argv[])
       ocl.queue, ocl.cells, CL_TRUE, 0,
       sizeof(float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
   checkError(err, "reading cells data", __LINE__);
-  for (int y = 0; y < params.ny; y++)
-  {
-    for (int x = 0; x < params.nx; x++)
-    {
-      for (int i = 0; i < NSPEEDS; i++)
-      {
-        // printf("%f", cells[x + (y * params.nx) + (i * totalSize)]);
-      }
-      // printf("\n");
-    }
-  }
+  // for (int y = 0; y < params.ny; y++)
+  // {
+  //   for (int x = 0; x < params.nx; x++)
+  //   {
+  // for (int i = 0; i < NSPEEDS; i++)
+  // {
+  //   printf("%f\n", cells[x + (y * params.nx) + (i * totalSize)]);
+  // }
+  // printf("\n");
+  //   }
+  // }
 
   /* write final values and free memory */
   printf("==done==\n");
@@ -284,14 +295,14 @@ int main(int argc, char *argv[])
 
 int timestep(const t_param params, int *obstacles, t_ocl ocl, int currentIter)
 {
-  accelerate_flow(params, obstacles, ocl, currentIter);
+  //accelerate_flow(params, obstacles, ocl, currentIter);
   collision(params, obstacles, ocl, currentIter);
   return EXIT_SUCCESS;
 }
 
 int timestep_reverse(const t_param params, int *obstacles, t_ocl ocl, int currentIter)
 {
-  accelerate_flow_reverse(params, obstacles, ocl, currentIter);
+  //accelerate_flow_reverse(params, obstacles, ocl, currentIter);
   collision_reverse(params, obstacles, ocl, currentIter);
   return EXIT_SUCCESS;
 }
@@ -349,6 +360,10 @@ int collision_reverse(const t_param params, int *obstacles, t_ocl ocl, int curre
   checkError(err, "setting collision arg 7", __LINE__);
   err = clSetKernelArg(ocl.collision, 8, sizeof(cl_int), &currentIter);
   checkError(err, "setting collision arg 8", __LINE__);
+  err = clSetKernelArg(ocl.collision, 9, sizeof(cl_float), &params.density);
+  checkError(err, "setting collision arg 9", __LINE__);
+  err = clSetKernelArg(ocl.collision, 10, sizeof(cl_float), &params.accel);
+  checkError(err, "setting collision arg 10", __LINE__);
 
   // Enqueue kernel
   size_t global[2] = {params.nx, params.ny};
@@ -415,6 +430,10 @@ int collision(const t_param params, int *obstacles, t_ocl ocl, int currentIter)
   checkError(err, "setting collision arg 7", __LINE__);
   err = clSetKernelArg(ocl.collision, 8, sizeof(cl_int), &currentIter);
   checkError(err, "setting collision arg 8", __LINE__);
+  err = clSetKernelArg(ocl.collision, 9, sizeof(cl_float), &params.density);
+  checkError(err, "setting collision arg 9", __LINE__);
+  err = clSetKernelArg(ocl.collision, 10, sizeof(cl_float), &params.accel);
+  checkError(err, "setting collision arg 10", __LINE__);
 
   // Enqueue kernel
   size_t global[2] = {params.nx, params.ny};

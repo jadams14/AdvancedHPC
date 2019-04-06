@@ -19,10 +19,8 @@ kernel void accelerate_flow(global float* restrict cells,
   int ii = get_global_id(0);
   /* if the cell is not occupied and
   ** we don't send a negative density */
-  const int totalSize = 0;
+  const int totalSize = nx * ny;
   int index = ii + jj*nx;
-  for (int xx = 0; xx < nx; xx++)
-  {
     if (!obstacles[index]
         && (cells[index + (3 * totalSize)] - w1) > 0.f
         && (cells[index + (6 * totalSize)] - w2) > 0.f
@@ -37,7 +35,7 @@ kernel void accelerate_flow(global float* restrict cells,
       cells[index + (6 * totalSize)] -= w2;
       cells[index + (7 * totalSize)] -= w2;
     }
-  }
+  
 }
 
 kernel void collision(global float * restrict cells, 
@@ -47,12 +45,15 @@ kernel void collision(global float * restrict cells,
                       local float * restrict l_tot_u,
                       int nx, int ny,
                       float omega, 
-                      int currentIter) {
+                      int currentIter,
+                      float density, float accel) {
 
   const float c_sq = 1.f / 3.f; /* square of speed of sound */
   const float w0 = 4.f / 9.f;   /* weighting factor */
   const float w1 = 1.f / 9.f;   /* weighting factor */
   const float w2 = 1.f / 36.f;  /* weighting factor */
+  const float w1_a_f = density * accel / 9.0;
+  const float w2_a_f = density * accel / 36.0;
 
   /* get column and row indices */
   const int ii = get_global_id(0);
@@ -68,33 +69,54 @@ kernel void collision(global float * restrict cells,
   const int workgroup = x + (y * get_num_groups(0));
   const int local_index = (l_x + (l_y * l_size_x));
   const int cell_index = ii + jj * nx;
-
-  // int mask = ((!obstacles[cell_index])
-  //       && ((cells[cell_index + (3 * totalSize)] - w1) > 0.f)
-  //       && ((cells[cell_index + (6 * totalSize)] - w2) > 0.f)
-  //       && ((cells[cell_index + (7 * totalSize)] - w2) > 0.f)
-  //       && (jj == g_size_jj - 2));
+  const int size_workgroup = l_size_x * l_size_y;
         
-  // const int y_n = (jj + 1) % ny;
-  // const int x_e = (ii + 1) % nx;
-  // const int y_s = (jj == 0) ? (jj + ny - 1) : (jj - 1);
-  // const int x_w = (ii == 0) ? (ii + nx - 1) : (ii - 1);
   const int y_n = (jj+1) - ny *((jj + 1) == ny);
   const int x_e = (ii+1) - nx * ((ii + 1) == nx);
   const int y_s = ((jj == 0) * ny) + jj - 1;
   const int x_w = ((ii == 0) * nx) + ii - 1;
-
   //Propogate
   const int totalSize = nx * ny;
+  const int mask1 = ((!obstacles[x_w + jj*nx])
+        && ((cells[x_w + jj*nx + (3 * totalSize)] - w1_a_f) > 0.f)
+        && ((cells[x_w + jj*nx + (6 * totalSize)] - w2_a_f) > 0.f)
+        && ((cells[x_w + jj*nx + (7 * totalSize)] - w2_a_f) > 0.f)
+        && (jj == ny - 2));
+  const int mask2 = ((!obstacles[x_e + jj*nx])
+        && ((cells[x_e + jj*nx + (3 * totalSize)] - w1_a_f) > 0.f)
+        && ((cells[x_e + jj*nx + (6 * totalSize)] - w2_a_f) > 0.f)
+        && ((cells[x_e + jj*nx + (7 * totalSize)] - w2_a_f) > 0.f)
+        && (jj == ny - 2));
+  const int mask3 = ((!obstacles[x_w + y_s*nx])
+        && ((cells[x_w + y_s*nx + (3 * totalSize)] - w1_a_f) > 0.f)
+        && ((cells[x_w + y_s*nx + (6 * totalSize)] - w2_a_f) > 0.f)
+        && ((cells[x_w + y_s*nx + (7 * totalSize)] - w2_a_f) > 0.f)
+        && (y_s == ny - 2));
+  const int mask4 = ((!obstacles[x_e + y_s*nx])
+        && ((cells[x_e + y_s*nx + (3 * totalSize)] - w1_a_f) > 0.f)
+        && ((cells[x_e + y_s*nx + (6 * totalSize)] - w2_a_f) > 0.f)
+        && ((cells[x_e + y_s*nx + (7 * totalSize)] - w2_a_f) > 0.f)
+        && (y_s == ny - 2));
+  const int mask5 = ((!obstacles[x_e + y_n*nx])
+        && ((cells[x_e + y_n*nx + (3 * totalSize)] - w1_a_f) > 0.f)
+        && ((cells[x_e + y_n*nx + (6 * totalSize)] - w2_a_f) > 0.f)
+        && ((cells[x_e + y_n*nx + (7 * totalSize)] - w2_a_f) > 0.f)
+        && (y_n == ny - 2));
+  const int mask6 = ((!obstacles[x_w + y_n*nx])
+        && ((cells[x_w + y_n*nx + (3 * totalSize)] - w1_a_f) > 0.f)
+        && ((cells[x_w + y_n*nx + (6 * totalSize)] - w2_a_f) > 0.f)
+        && ((cells[x_w + y_n*nx + (7 * totalSize)] - w2_a_f) > 0.f)
+        && (y_n == ny - 2));
+
   const float speed = cells[cell_index];
-  const float speed1 = cells[x_w + jj*nx + (1 * totalSize)];
+  const float speed1 = cells[x_w + jj*nx + (1 * totalSize)] + (mask1 * w1_a_f);
   const float speed2 = cells[ii + y_s*nx + (2 * totalSize)];
-  const float speed3 = cells[x_e + jj*nx + (3 * totalSize)];
+  const float speed3 = cells[x_e + jj*nx + (3 * totalSize)] - (mask2 * w1_a_f);
   const float speed4 = cells[ii + y_n*nx + (4 * totalSize)];
-  const float speed5 = cells[x_w + y_s*nx + (5 * totalSize)];
-  const float speed6 = cells[x_e + y_s*nx + (6 * totalSize)];
-  const float speed7 = cells[x_e + y_n*nx + (7 * totalSize)];
-  const float speed8 = cells[x_w + y_n*nx + (8 * totalSize)];
+  const float speed5 = cells[x_w + y_s*nx + (5 * totalSize)] + (mask3 * w2_a_f);
+  const float speed6 = cells[x_e + y_s*nx + (6 * totalSize)] - (mask4 * w2_a_f);
+  const float speed7 = cells[x_e + y_n*nx + (7 * totalSize)] - (mask5 * w2_a_f);
+  const float speed8 = cells[x_w + y_n*nx + (8 * totalSize)] + (mask6 * w2_a_f);
   /* loop over the cells in the grid
   ** NB the collision step is called after
   ** the propagate step and so values of interest
@@ -166,15 +188,15 @@ kernel void collision(global float * restrict cells,
                                      - minusU_SQ));
 
     // /* relaxation step */
-    tmp_cells[cell_index]  = (obstacles[cell_index]) ? speed : (speed + omega * (d_equ - speed));
-    tmp_cells[cell_index  + (1 * totalSize)] = (obstacles[cell_index]) ? speed3 : (speed1 + omega * (d_equ1 - speed1));
-    tmp_cells[cell_index  + (2 * totalSize)] = (obstacles[cell_index]) ? speed4 : (speed2 + omega * (d_equ2 - speed2));
-    tmp_cells[cell_index  + (3 * totalSize)] = (obstacles[cell_index]) ? speed1 : (speed3 + omega * (d_equ3 - speed3));
-    tmp_cells[cell_index  + (4 * totalSize)] = (obstacles[cell_index]) ? speed2 : (speed4 + omega * (d_equ4 - speed4));
-    tmp_cells[cell_index  + (5 * totalSize)] = (obstacles[cell_index]) ? speed7 : (speed5 + omega * (d_equ5 - speed5));
-    tmp_cells[cell_index  + (6 * totalSize)] = (obstacles[cell_index]) ? speed8 : (speed6 + omega * (d_equ6 - speed6));
-    tmp_cells[cell_index  + (7 * totalSize)] = (obstacles[cell_index]) ? speed5 : (speed7 + omega * (d_equ7 - speed7));
-    tmp_cells[cell_index  + (8 * totalSize)] = (obstacles[cell_index]) ? speed6 : (speed8 + omega * (d_equ8 - speed8));
+    // tmp_cells[cell_index]  = (obstacles[cell_index]) ? speed : (speed + omega * (d_equ - speed));
+    // tmp_cells[cell_index  + (1 * totalSize)] = (obstacles[cell_index]) ? speed3 : (speed1 + omega * (d_equ1 - speed1));
+    // tmp_cells[cell_index  + (2 * totalSize)] = (obstacles[cell_index]) ? speed4 : (speed2 + omega * (d_equ2 - speed2));
+    // tmp_cells[cell_index  + (3 * totalSize)] = (obstacles[cell_index]) ? speed1 : (speed3 + omega * (d_equ3 - speed3));
+    // tmp_cells[cell_index  + (4 * totalSize)] = (obstacles[cell_index]) ? speed2 : (speed4 + omega * (d_equ4 - speed4));
+    // tmp_cells[cell_index  + (5 * totalSize)] = (obstacles[cell_index]) ? speed7 : (speed5 + omega * (d_equ5 - speed5));
+    // tmp_cells[cell_index  + (6 * totalSize)] = (obstacles[cell_index]) ? speed8 : (speed6 + omega * (d_equ6 - speed6));
+    // tmp_cells[cell_index  + (7 * totalSize)] = (obstacles[cell_index]) ? speed5 : (speed7 + omega * (d_equ7 - speed7));
+    // tmp_cells[cell_index  + (8 * totalSize)] = (obstacles[cell_index]) ? speed6 : (speed8 + omega * (d_equ8 - speed8));
     // tmp_cells[cell_index  + (0 * totalSize)] = 100;
     // tmp_cells[cell_index  + (1 * totalSize)] = 100;
     // tmp_cells[cell_index  + (2 * totalSize)] = 100;
@@ -184,30 +206,52 @@ kernel void collision(global float * restrict cells,
     // tmp_cells[cell_index  + (6 * totalSize)] = 100;
     // tmp_cells[cell_index  + (7 * totalSize)] = 100;
     // tmp_cells[cell_index  + (8 * totalSize)] = 100;
-    // tmp_cells[cell_index]  = ((obstacles[cell_index]) * speed) + ((!obstacles[cell_index]) * (speed + omega * (d_equ - speed)));
-    // tmp_cells[cell_index  + (1 * totalSize)] = ((obstacles[cell_index]) * speed3) + ((!obstacles[cell_index]) * (speed1 + omega * (d_equ1 - speed1)));
-    // tmp_cells[cell_index  + (2 * totalSize)] = ((obstacles[cell_index]) * speed4) + ((!obstacles[cell_index]) * (speed2 + omega * (d_equ2 - speed2)));
-    // tmp_cells[cell_index  + (3 * totalSize)] = ((obstacles[cell_index]) * speed1) + ((!obstacles[cell_index]) * (speed3 + omega * (d_equ3 - speed3)));
-    // tmp_cells[cell_index  + (4 * totalSize)] = ((obstacles[cell_index]) * speed2) + ((!obstacles[cell_index]) * (speed4 + omega * (d_equ4 - speed4)));
-    // tmp_cells[cell_index  + (5 * totalSize)] = ((obstacles[cell_index]) * speed7) + ((!obstacles[cell_index]) * (speed5 + omega * (d_equ5 - speed5)));
-    // tmp_cells[cell_index  + (6 * totalSize)] = ((obstacles[cell_index]) * speed8) + ((!obstacles[cell_index]) * (speed6 + omega * (d_equ6 - speed6)));
-    // tmp_cells[cell_index  + (7 * totalSize)] = ((obstacles[cell_index]) * speed5) + ((!obstacles[cell_index]) * (speed7 + omega * (d_equ7 - speed7)));
-    // tmp_cells[cell_index  + (8 * totalSize)] = ((obstacles[cell_index]) * speed6) + ((!obstacles[cell_index]) * (speed8 + omega * (d_equ8 - speed8)));
+    tmp_cells[cell_index]  = ((obstacles[cell_index]) * speed) + ((!obstacles[cell_index]) * (speed + omega * (d_equ - speed)));
+    tmp_cells[cell_index  + (1 * totalSize)] = ((obstacles[cell_index]) * speed3) + ((!obstacles[cell_index]) * (speed1 + omega * (d_equ1 - speed1)));
+    tmp_cells[cell_index  + (2 * totalSize)] = ((obstacles[cell_index]) * speed4) + ((!obstacles[cell_index]) * (speed2 + omega * (d_equ2 - speed2)));
+    tmp_cells[cell_index  + (3 * totalSize)] = ((obstacles[cell_index]) * speed1) + ((!obstacles[cell_index]) * (speed3 + omega * (d_equ3 - speed3)));
+    tmp_cells[cell_index  + (4 * totalSize)] = ((obstacles[cell_index]) * speed2) + ((!obstacles[cell_index]) * (speed4 + omega * (d_equ4 - speed4)));
+    tmp_cells[cell_index  + (5 * totalSize)] = ((obstacles[cell_index]) * speed7) + ((!obstacles[cell_index]) * (speed5 + omega * (d_equ5 - speed5)));
+    tmp_cells[cell_index  + (6 * totalSize)] = ((obstacles[cell_index]) * speed8) + ((!obstacles[cell_index]) * (speed6 + omega * (d_equ6 - speed6)));
+    tmp_cells[cell_index  + (7 * totalSize)] = ((obstacles[cell_index]) * speed5) + ((!obstacles[cell_index]) * (speed7 + omega * (d_equ7 - speed7)));
+    tmp_cells[cell_index  + (8 * totalSize)] = ((obstacles[cell_index]) * speed6) + ((!obstacles[cell_index]) * (speed8 + omega * (d_equ8 - speed8)));
 
   // /* accumulate the norm of x- and y- velocity components */
-    l_tot_u[local_index] = ((!obstacles[cell_index]) * (float)sqrt((u_x * u_x) + (u_y * u_y)));
+    l_tot_u[local_index] = (obstacles[cell_index]) ? 0 : (float)sqrt((u_x * u_x) + (u_y * u_y));
     // l_tot_u[local_index] = (obstacles[cell_index]) ? 0 : (float)sqrt((u_x * u_x) + (u_y * u_y));
   /* increase counter of inspected cells */
   // ++l_tot_cells;
 
-               
-  for (int division = local_index * 0.5; division > 0; division *= 0.5) {
-    l_tot_u[local_index] = (local_index < division) ? l_tot_u[local_index] + l_tot_u[local_index + division] : l_tot_u[local_index];
-  }  
-    barrier(CLK_LOCAL_MEM_FENCE);
 
-  if (local_index == 0) {
-    g_tot_u[workgroup + (currentIter * get_num_groups(0) * get_num_groups(1))] = l_tot_u[0];
+  // if (l_y == 0 && l_x == 0) {
+  //     int num_workgroup = get_num_groups(0) * get_num_groups(1);
+  //     int x = get_group_id(0);
+  //     int y = get_group_id(1);
+  //     g_tot_u[workgroup + (currentIter * num_workgroup)] = 0;
+  //     for (int xx = 0; xx < l_size_x; xx++) {
+  //       for (int yy = 0; yy < l_size_y; yy++) {
+  //         g_tot_u[workgroup + (currentIter * num_workgroup)] += l_tot_u[xx + (yy * l_size_x)];
+  //       }
+  //     }
+  //   }
+  // int size = get_local_size(0) * get_local_size(1);
+  int num_workgroup = get_num_groups(0) * get_num_groups(1);
+  // int dividers = (local_index == 0) ? 0 : local_index;
+  // for (int division = local_index * 0.5; division > 0; division *= 0.5) {
+  //   l_tot_u[local_index] = (local_index < division) ? (l_tot_u[local_index] + l_tot_u[local_index + division]) : l_tot_u[local_index];
+  //   barrier(CLK_LOCAL_MEM_FENCE);
+  // }
+  // if (local_index == 0) {
+  //   g_tot_u[workgroup + (currentIter * num_workgroup)] = l_tot_u[0];
+  // }
+  barrier(CLK_LOCAL_MEM_FENCE);
+  for (int i = 2; i <= size_workgroup; i *= 2) {
+    if (l_x % i == 0) {
+      l_tot_u[local_index] += l_tot_u[local_index + (int)i / 2];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
   }
+  int position = workgroup + (currentIter * num_workgroup);
+  g_tot_u[position] = l_tot_u[0];
 }
                     
