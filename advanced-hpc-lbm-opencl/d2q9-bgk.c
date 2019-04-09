@@ -93,7 +93,7 @@ typedef struct
   cl_command_queue queue;
 
   cl_program program;
-  cl_kernel accelerate_flow;
+  // cl_kernel accelerate_flow;
   cl_kernel collision;
 
   cl_mem cells;
@@ -111,7 +111,9 @@ typedef struct
 ** function prototypes
 */
 
-int WORKGROUPS;
+int WORKGROUPSIZE_X;
+int WORKGROUPSIZE_Y;
+int NUM_WORKGROUPS;
 int numberThreads;
 
 /* load params, allocate memory, load obstacles & initialise fluid particle densities */
@@ -126,10 +128,8 @@ int initialise(const char *paramfile, const char *obstaclefile, t_param *params,
 */
 int timestep(const t_param params, int *obstacles, t_ocl ocl, int currentIter);
 int timestep_reverse(const t_param params, int *obstacles, t_ocl ocl, int currentIter);
-int accelerate_flow(const t_param params, int *obstacles, t_ocl ocl, int currentIter);
 int collision(const t_param params, int *obstacles, t_ocl ocl, int currentIter);
 int timestep_reverse(const t_param params, int *obstacles, t_ocl ocl, int currentIter);
-int accelerate_flow_reverse(const t_param params, int *obstacles, t_ocl ocl, int currentIter);
 int collision_reverse(const t_param params, int *obstacles, t_ocl ocl, int currentIter);
 int write_values(const t_param params, float *cells, int *obstacles, float *av_vels);
 
@@ -189,23 +189,6 @@ int main(int argc, char *argv[])
   numberThreads = 16;
   /* initialise our data structures and load values from file */
   initialise(paramfile, obstaclefile, &params, &obstacles, &cells, &tmp_cells, &av_vels, &new_tot_u, &ocl);
-
-  /* iterate for maxIters timesteps */
-  gettimeofday(&timstr, NULL);
-  tic = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
-
-  // Write cells to OpenCL buffer
-  err = clEnqueueWriteBuffer(
-      ocl.queue, ocl.cells, CL_TRUE, 0,
-      sizeof(cl_float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
-  checkError(err, "writing cells data", __LINE__);
-  // Write obstacles to OpenCL buffer
-  err = clEnqueueWriteBuffer(
-      ocl.queue, ocl.obstacles, CL_TRUE, 0,
-      sizeof(cl_int) * params.nx * params.ny, obstacles, 0, NULL, NULL);
-  checkError(err, "writing obstacles data", __LINE__);
-
-  int totalSize = params.nx * params.ny;
 #pragma omp parallel for reduction(+ \
                                    : tot_cells) num_threads(numberThreads)
   for (int y = 0; y < params.ny; y++)
@@ -216,45 +199,47 @@ int main(int argc, char *argv[])
       tot_cells += 1 * (obstacles[x + (y * params.nx)] == 0);
     }
   }
-  // for (int y = 0; y < params.ny; y++)
-  // {
-  //   for (int x = 0; x < params.nx; x++)
-  //   {
-  //     for (int i = 0; i < NSPEEDS; i++)
-  //     {
-  //       printf("%f", cells[x + (y * params.nx) + (i * totalSize)]);
-  //     }
-  //     printf("\n");
-  //   }
-  // }
-  float total_tot_u = 0;
-  for (int tt = 0; tt < params.maxIters; tt += 2)
+  /* iterate for maxIters timesteps */
+  gettimeofday(&timstr, NULL);
+  tic = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
+
+  // Write cells to OpenCL buffer
+  err = clEnqueueWriteBuffer(
+      ocl.queue, ocl.cells, CL_TRUE, 0,
+      sizeof(cl_float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
+  checkError(err, "writing cells data", __LINE__);
+
+  // Write obstacles to OpenCL buffer
+  err = clEnqueueWriteBuffer(
+      ocl.queue, ocl.obstacles, CL_TRUE, 0,
+      sizeof(cl_int) * params.nx * params.ny, obstacles, 0, NULL, NULL);
+  checkError(err, "writing obstacles data", __LINE__);
+  int totalSize = params.nx * params.ny;
+  for (int tt = 0; tt < params.maxIters; tt++)
   {
     timestep(params, obstacles, ocl, tt);
-    timestep_reverse(params, obstacles, ocl, tt + 1);
+    // timestep_reverse(params, obstacles, ocl, tt + 1);
   }
 
   // Wait for kernel to finish
   err = clFinish(ocl.queue);
-  checkError(err, "waiting foreverything to kernel", __LINE__);
+  checkError(err, "waiting for everything to kernel", __LINE__);
+
   // Read cells from device
   err = clEnqueueReadBuffer(
       ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
-      sizeof(float) * WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
-  checkError(err, "reading cells data", __LINE__);
-  float tot_u = 0;
-#pragma omp parallel for reduction(+ \
-                                   : tot_u) num_threads(numberThreads)
+      sizeof(float) * NUM_WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
+  checkError(err, "reading tot_u data", __LINE__);
+
+#pragma omp parallel for num_threads(numberThreads)
   for (int i = 0; i < params.maxIters; i++)
   {
 #pragma omp simd
-    for (int j = 0; j < WORKGROUPS; j++)
+    for (int j = 0; j < NUM_WORKGROUPS; j++)
     {
-      tot_u += new_tot_u[j + (i * WORKGROUPS)];
+      av_vels[i] += new_tot_u[j + (i * NUM_WORKGROUPS)];
     }
-    av_vels[i] = tot_u / (float)tot_cells;
-    // printf("%f\n", av_vels[i]);
-    tot_u = 0;
+    av_vels[i] /= (float)tot_cells;
   }
 
   gettimeofday(&timstr, NULL);
@@ -269,18 +254,6 @@ int main(int argc, char *argv[])
       ocl.queue, ocl.cells, CL_TRUE, 0,
       sizeof(float) * params.nx * params.ny * NSPEEDS, cells, 0, NULL, NULL);
   checkError(err, "reading cells data", __LINE__);
-  // for (int y = 0; y < params.ny; y++)
-  // {
-  //   for (int x = 0; x < params.nx; x++)
-  //   {
-  // for (int i = 0; i < NSPEEDS; i++)
-  // {
-  //   printf("%f\n", cells[x + (y * params.nx) + (i * totalSize)]);
-  // }
-  // printf("\n");
-  //   }
-  // }
-
   /* write final values and free memory */
   printf("==done==\n");
   printf("Reynolds number:\t\t%.12E\n", calc_reynolds(params, cells, obstacles, ocl));
@@ -295,43 +268,13 @@ int main(int argc, char *argv[])
 
 int timestep(const t_param params, int *obstacles, t_ocl ocl, int currentIter)
 {
-  //accelerate_flow(params, obstacles, ocl, currentIter);
   collision(params, obstacles, ocl, currentIter);
   return EXIT_SUCCESS;
 }
 
 int timestep_reverse(const t_param params, int *obstacles, t_ocl ocl, int currentIter)
 {
-  //accelerate_flow_reverse(params, obstacles, ocl, currentIter);
   collision_reverse(params, obstacles, ocl, currentIter);
-  return EXIT_SUCCESS;
-}
-
-int accelerate_flow_reverse(const t_param params, int *obstacles, t_ocl ocl, int currentIter)
-{
-  cl_int err;
-  // Set kernel arguments
-  err = clSetKernelArg(ocl.accelerate_flow, 0, sizeof(cl_mem), &ocl.tmp_cells);
-  checkError(err, "setting accelerate_flow arg 0", __LINE__);
-
-  err = clSetKernelArg(ocl.accelerate_flow, 1, sizeof(cl_mem), &ocl.obstacles);
-  checkError(err, "setting accelerate_flow arg 1", __LINE__);
-  err = clSetKernelArg(ocl.accelerate_flow, 2, sizeof(cl_int), &params.nx);
-  checkError(err, "setting accelerate_flow arg 2", __LINE__);
-  err = clSetKernelArg(ocl.accelerate_flow, 3, sizeof(cl_int), &params.ny);
-  checkError(err, "setting accelerate_flow arg 3", __LINE__);
-  err = clSetKernelArg(ocl.accelerate_flow, 4, sizeof(cl_float), &params.density);
-  checkError(err, "setting accelerate_flow arg 4", __LINE__);
-  err = clSetKernelArg(ocl.accelerate_flow, 5, sizeof(cl_float), &params.accel);
-  checkError(err, "setting accelerate_flow arg 5", __LINE__);
-
-  // Enqueue kernel
-  size_t global[1] = {params.nx};
-  // size_t local[1] = {WORKGROUPS};
-  err = clEnqueueNDRangeKernel(ocl.queue, ocl.accelerate_flow,
-                               1, NULL, global, NULL, 0, NULL, NULL);
-  checkError(err, "enqueueing accelerate_flow kernel", __LINE__);
-
   return EXIT_SUCCESS;
 }
 
@@ -350,7 +293,7 @@ int collision_reverse(const t_param params, int *obstacles, t_ocl ocl, int curre
   checkError(err, "setting collision arg 3", __LINE__);
   err = clSetKernelArg(ocl.collision, 3, sizeof(cl_mem), &ocl.g_tot_u);
   checkError(err, "setting collision arg 3", __LINE__);
-  err = clSetKernelArg(ocl.collision, 4, sizeof(cl_float) * 128, NULL);
+  err = clSetKernelArg(ocl.collision, 4, sizeof(cl_float) * WORKGROUPSIZE_X * WORKGROUPSIZE_Y, NULL);
   checkError(err, "setting collision arg 4", __LINE__);
   err = clSetKernelArg(ocl.collision, 5, sizeof(cl_int), &params.nx);
   checkError(err, "setting collision arg 5", __LINE__);
@@ -367,39 +310,10 @@ int collision_reverse(const t_param params, int *obstacles, t_ocl ocl, int curre
 
   // Enqueue kernel
   size_t global[2] = {params.nx, params.ny};
-  size_t local[2] = {WORKGROUPS, 1};
+  size_t local[2] = {WORKGROUPSIZE_X, WORKGROUPSIZE_Y};
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.collision,
                                2, NULL, global, local, 0, NULL, NULL);
   checkError(err, "enqueueing collision kernel", __LINE__);
-
-  return EXIT_SUCCESS;
-}
-
-int accelerate_flow(const t_param params, int *obstacles, t_ocl ocl, int currentIter)
-{
-  cl_int err;
-
-  // Set kernel arguments
-  err = clSetKernelArg(ocl.accelerate_flow, 0, sizeof(cl_mem), &ocl.cells);
-  checkError(err, "setting accelerate_flow arg 0", __LINE__);
-
-  err = clSetKernelArg(ocl.accelerate_flow, 1, sizeof(cl_mem), &ocl.obstacles);
-  checkError(err, "setting accelerate_flow arg 1", __LINE__);
-  err = clSetKernelArg(ocl.accelerate_flow, 2, sizeof(cl_int), &params.nx);
-  checkError(err, "setting accelerate_flow arg 2", __LINE__);
-  err = clSetKernelArg(ocl.accelerate_flow, 3, sizeof(cl_int), &params.ny);
-  checkError(err, "setting accelerate_flow arg 3", __LINE__);
-  err = clSetKernelArg(ocl.accelerate_flow, 4, sizeof(cl_float), &params.density);
-  checkError(err, "setting accelerate_flow arg 4", __LINE__);
-  err = clSetKernelArg(ocl.accelerate_flow, 5, sizeof(cl_float), &params.accel);
-  checkError(err, "setting accelerate_flow arg 5", __LINE__);
-
-  // Enqueue kernel
-  size_t global[1] = {params.nx};
-  // size_t local[1] = {WORKGROUPS};
-  err = clEnqueueNDRangeKernel(ocl.queue, ocl.accelerate_flow,
-                               1, NULL, global, NULL, 0, NULL, NULL);
-  checkError(err, "enqueueing accelerate_flow kernel", __LINE__);
 
   return EXIT_SUCCESS;
 }
@@ -408,19 +322,29 @@ int collision(const t_param params, int *obstacles, t_ocl ocl, int currentIter)
 {
   /* loop over the cells in the grid */
   cl_int err;
-  int divide = sqrt(WORKGROUPS);
+  if (currentIter % 2 == 0)
+  {
+    // Set kernel arguments
+    err = clSetKernelArg(ocl.collision, 0, sizeof(cl_mem), &ocl.cells);
+    checkError(err, "setting collision arg 0", __LINE__);
+    err = clSetKernelArg(ocl.collision, 1, sizeof(cl_mem), &ocl.tmp_cells);
+    checkError(err, "setting collision arg 1", __LINE__);
+  }
+  else
+  {
 
-  // Set kernel arguments
-  err = clSetKernelArg(ocl.collision, 0, sizeof(cl_mem), &ocl.cells);
-  checkError(err, "setting collision arg 0", __LINE__);
-  err = clSetKernelArg(ocl.collision, 1, sizeof(cl_mem), &ocl.tmp_cells);
-  checkError(err, "setting collision arg 1", __LINE__);
+    // Set kernel arguments
+    err = clSetKernelArg(ocl.collision, 0, sizeof(cl_mem), &ocl.tmp_cells);
+    checkError(err, "setting collision arg 0", __LINE__);
+    err = clSetKernelArg(ocl.collision, 1, sizeof(cl_mem), &ocl.cells);
+    checkError(err, "setting collision arg 1", __LINE__);
+  }
 
   err = clSetKernelArg(ocl.collision, 2, sizeof(cl_mem), &ocl.obstacles);
   checkError(err, "setting collision arg 3", __LINE__);
   err = clSetKernelArg(ocl.collision, 3, sizeof(cl_mem), &ocl.g_tot_u);
   checkError(err, "setting collision arg 3", __LINE__);
-  err = clSetKernelArg(ocl.collision, 4, sizeof(cl_float) * 128, NULL);
+  err = clSetKernelArg(ocl.collision, 4, sizeof(cl_float) * WORKGROUPSIZE_X * WORKGROUPSIZE_Y, NULL);
   checkError(err, "setting collision arg 4", __LINE__);
   err = clSetKernelArg(ocl.collision, 5, sizeof(cl_int), &params.nx);
   checkError(err, "setting collision arg 5", __LINE__);
@@ -437,7 +361,7 @@ int collision(const t_param params, int *obstacles, t_ocl ocl, int currentIter)
 
   // Enqueue kernel
   size_t global[2] = {params.nx, params.ny};
-  size_t local[2] = {128, 1};
+  size_t local[2] = {WORKGROUPSIZE_X, WORKGROUPSIZE_Y};
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.collision,
                                2, NULL, global, local, 0, NULL, NULL);
   checkError(err, "enqueueing collision kernel", __LINE__);
@@ -543,9 +467,10 @@ int initialise(const char *paramfile, const char *obstaclefile,
 
   /* and close up the file */
   fclose(fp);
-
-  WORKGROUPS = 128;
-
+  WORKGROUPSIZE_X = 128;
+  WORKGROUPSIZE_Y = 1;
+  NUM_WORKGROUPS = params->nx * params->ny / (WORKGROUPSIZE_X * WORKGROUPSIZE_Y);
+  printf("%d\n", NUM_WORKGROUPS);
   /*
   ** Allocate memory.
   **
@@ -572,7 +497,7 @@ int initialise(const char *paramfile, const char *obstaclefile,
     die("cannot allocate column memory for obstacles", __LINE__, __FILE__);
 
   /* main grid */
-  *new_tot_u = malloc(sizeof(float) * WORKGROUPS * params->maxIters);
+  *new_tot_u = (float *)malloc(sizeof(float) * NUM_WORKGROUPS * params->maxIters);
 
   if (*new_tot_u == NULL)
     die("cannot allocate memory for tot-u", __LINE__, __FILE__);
@@ -594,7 +519,7 @@ int initialise(const char *paramfile, const char *obstaclefile,
 #pragma omp parallel for num_threads(numberThreads)
   for (int jj = 0; jj < params->ny; jj++)
   {
-#pragma omp simd
+    // #pragma omp simd
     for (int ii = 0; ii < params->nx; ii++)
     {
       /* centre */
@@ -612,6 +537,7 @@ int initialise(const char *paramfile, const char *obstaclefile,
     }
   }
 
+#pragma omp parallel for num_threads(numberThreads)
   /* first set all cells in obstacle array to zero */
   for (int jj = 0; jj < params->ny; jj++)
   {
@@ -621,7 +547,8 @@ int initialise(const char *paramfile, const char *obstaclefile,
     }
   }
 
-  for (int jj = 0; jj < params->maxIters * WORKGROUPS; jj++)
+#pragma omp parallel for num_threads(numberThreads)
+  for (int jj = 0; jj < params->maxIters * NUM_WORKGROUPS; jj++)
   {
     (*new_tot_u)[jj] = 0;
   }
@@ -716,8 +643,6 @@ int initialise(const char *paramfile, const char *obstaclefile,
   checkError(err, "building program", __LINE__);
 
   // Create OpenCL kernels
-  ocl->accelerate_flow = clCreateKernel(ocl->program, "accelerate_flow", &err);
-  checkError(err, "creating accelerate_flow kernel", __LINE__);
   ocl->collision = clCreateKernel(ocl->program, "collision", &err);
   checkError(err, "creating collision kernel", __LINE__);
 
@@ -727,7 +652,7 @@ int initialise(const char *paramfile, const char *obstaclefile,
   checkError(err, "creating obstacles buffer", __LINE__);
   ocl->g_tot_u = clCreateBuffer(
       ocl->context, CL_MEM_READ_WRITE,
-      sizeof(cl_float) * WORKGROUPS * params->maxIters, NULL, &err);
+      sizeof(cl_float) * NUM_WORKGROUPS * params->maxIters, NULL, &err);
   checkError(err, "creating global tot u buffer", __LINE__);
   ocl->cells = clCreateBuffer(
       ocl->context, CL_MEM_READ_WRITE,
@@ -766,7 +691,7 @@ int finalise(const t_param *params, float **cells_ptr, float **tmp_cells_ptr,
   clReleaseMemObject(ocl.tmp_cells);
   clReleaseMemObject(ocl.obstacles);
   clReleaseMemObject(ocl.g_tot_u);
-  clReleaseKernel(ocl.accelerate_flow);
+  // clReleaseKernel(ocl.accelerate_flow);
   clReleaseKernel(ocl.collision);
   clReleaseProgram(ocl.program);
   clReleaseCommandQueue(ocl.queue);

@@ -24,6 +24,8 @@ echo "This jobs runs on the following machines: $(cat "$PBS_NODEFILE" | uniq)"
 echo "GPU selected: $OCL_DEVICE"
 echo
 
-# Run the executable
-./d2q9-bgk input_128x128.params obstacles_128x128.dat
-
+for SIZE in "128x128" "128x256" "256x256";
+do
+  ./d2q9-bgk input_${SIZE}.params obstacles_${SIZE}.dat
+  python check/check.py --ref-av-vels-file=check/${SIZE}.av_vels.dat --ref-final-state-file=check/${SIZE}.final_state.dat --av-vels-file=./av_vels.dat --final-state-file=./final_state.dat
+done
