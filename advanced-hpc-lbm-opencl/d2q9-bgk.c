@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
       ocl.queue, ocl.g_tot_u, CL_TRUE, 0,
       sizeof(float) * NUM_WORKGROUPS * params.maxIters, new_tot_u, 0, NULL, NULL);
   checkError(err, "reading tot_u data", __LINE__);
-
+  printf("%d\n", NUM_WORKGROUPS);
 #pragma omp parallel for num_threads(numberThreads)
   for (int i = 0; i < params.maxIters; i++)
   {
