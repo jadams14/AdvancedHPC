@@ -533,8 +533,8 @@ int initialise(const char *paramfile, const char *obstaclefile,
 
   /* and close up the file */
   fclose(fp);
-  WORKGROUPSIZE_X = 128;
-  WORKGROUPSIZE_Y = 1;
+  WORKGROUPSIZE_X = 16;
+  WORKGROUPSIZE_Y = 8;
   NUM_WORKGROUPS = params->nx * params->ny / (WORKGROUPSIZE_X * WORKGROUPSIZE_Y);
 
   /*
